@@ -1,0 +1,21 @@
+[package]
+name = "ricsctl"
+version = "0.2.0"
+authors = ["Skami"]
+license = "MIT"
+edition = "2018"
+
+
+[dependencies]
+protobuf = { version = "2.8.1", features = ["with-bytes"] }
+log = "0.4"
+env_logger = "0.7.1"
+clap = "2.33.0"
+serialport = "3.3.0"
+rlua = { version = "0.17.0", default-features=false, features = ["system-lua"] }
+libloading = "0.5.2"
+libc = "0.2"
+    
+
+[build-dependencies]
+protoc-rust = "2.0"

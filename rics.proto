@@ -1,0 +1,63 @@
+
+// On connection to server, client may require a name change
+message RICS_Connection {
+        optional bool connect_as_node = 1;
+}
+
+message RICS_Data {
+        optional int32 source = 100;
+        optional int32 target = 101;
+
+        optional bytes data = 1; // Message content
+        optional int32 id = 2; // Id used depending on the context
+        enum RICS_DataType {
+             RAW = 0;
+             STREAM = 1;
+             CAN = 2;
+        }
+        optional RICS_DataType type = 3; // DataType used for some internal protocol.
+        extensions 200 to 299;
+}
+// message RICS_RequestData {
+//         repeated RICS_Data messages = 1;
+// }
+
+message RICS_Route {
+        optional int32 from = 1;
+        optional int32 to = 2;
+}
+
+// Request to the server
+message RICS_Request {
+        // Server query types
+        enum RICS_Query {
+             NULL = 0;
+             LIST_SINK = 1;
+             WHO_AM_I = 2;
+             DAEMON_QUIT = 255;
+        }
+        oneof content {
+              string set_name = 2;
+              RICS_Query query = 3;
+              RICS_Data data = 4; // Messages
+              RICS_Route add_route = 5;
+              RICS_Route del_route = 6;
+              // TODO Rerouting commands
+        }
+}
+
+// Server response
+message RICS_Response {
+        message RICS_Id {
+                required int32 id = 1;
+                optional string name = 2;
+        }
+        message RICS_IdList {
+                repeated RICS_Id ids = 1;
+        }
+        oneof content {
+              RICS_IdList idlist = 1;
+              int32 node = 2;
+              RICS_Data data = 4;
+        }
+}
