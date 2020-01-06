@@ -12,8 +12,10 @@ message RICS_Data {
         optional int32 id = 2; // Id used depending on the context
         enum RICS_DataType {
              RAW = 0;
-             STREAM = 1;
-             CAN = 2;
+             STREAM = 1; // Stream piece packet
+             CAN = 2; // CANbus hi-level emulation 
+             DATAGRAM = 3; // Custom packet based communication
+             SYNC = 4 ; // Sync pulse, always broadcast.
         }
         optional RICS_DataType type = 3; // DataType used for some internal protocol.
         extensions 200 to 299;
@@ -25,6 +27,7 @@ message RICS_Data {
 message RICS_Route {
         optional int32 from = 1;
         optional int32 to = 2;
+        optional bool bidirectional = 3;
 }
 
 // Request to the server
