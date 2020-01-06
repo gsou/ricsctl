@@ -1,10 +1,17 @@
 [package]
-name = "ricsctl"
+name = "rics"
 version = "0.2.0"
 authors = ["Skami"]
 license = "MIT"
 edition = "2018"
 
+[lib]
+name = "rics"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ricsctl"
+path = "src/main.rs"
 
 [dependencies]
 protobuf = { version = "2.8.1", features = ["with-bytes"] }
