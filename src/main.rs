@@ -15,11 +15,9 @@ use host::ServerState;
 
 use std::fs::File;
 use std::thread;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdout, Read, Write};
 use std::os::unix::io::FromRawFd;
 use std::sync::{Arc, RwLock, Mutex};
-use std::sync::mpsc::channel;
-use std::time::Duration;
 use clap::{Arg, App, SubCommand};
 
 #[derive(Debug)]
@@ -56,7 +54,7 @@ fn main() {
              .help("If a client or server is started, it will connect to the given tcp socket"))
         .subcommand(SubCommand::with_name("plugin")
                     .about("Load an external processing plugin")
-                    .arg(Arg::with_name("lua") // TODO LUA SUPPORT
+                    .arg(Arg::with_name("lua")
                          .long("lua")
                          .number_of_values(1)
                          .required_unless("dynlib")
@@ -114,6 +112,11 @@ fn main() {
                     .help("Destination nodes to add")))
         .subcommand(SubCommand::with_name("can")
                     .about("Internal can protocol")
+                    .subcommand(SubCommand::with_name("broadcast")
+                                .about("Set server's can broadcast flag")
+                                .arg(Arg::with_name("BROADCAST")
+                                     .index(1)
+                                     .required(true)))
                     .subcommand(SubCommand::with_name("send")
                                 .about("Send a can message")
                                 .arg(Arg::with_name("id")
@@ -222,6 +225,7 @@ fn main() {
 
                 let rx = svr.listen_response();
 
+                let mut update_enabled = true;
                 loop {
                     if let Ok(resp) = rx.try_recv() {
                         if resp.has_data() {
@@ -230,9 +234,11 @@ fn main() {
                                 info!("Sending can message {} to plugin", p.get_id());
                                 engine.can_rx(&mut svr, p.get_id() as u32, p.get_data().to_vec());
                             }
+
+                            update_enabled = true
                         }
-                    } else {
-                        engine.update(&mut svr);
+                    } else if update_enabled {
+                        update_enabled = engine.update(&mut svr);
                     }
                 }
 
@@ -248,14 +254,36 @@ fn main() {
                 }
             }
             else if let Some(matches) = matches.subcommand_matches("can") {
-                if let Some(matches) = matches.subcommand_matches("send") {
+                if let Some(matches) = matches.subcommand_matches("broadcast") {
+                    //////////////////////// CAN BROADCAST FLAG ///////////////////
                     svr.connect(false);
-                    let id = matches.value_of("id").unwrap().parse::<i32>().expect("Invalid CAN id");
-                    let data = matches.value_of("data").unwrap()
-                        .trim_matches(|c| c == '[' || c == ']')
-                        .split(',')
-                        .map(|n| n.trim().parse().expect("Invalid CAN data"))
-                        .collect::<Vec<u8>>();
+                    svr.set_can_broadcast(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("BROADCAST").unwrap()).eval() {
+                        Ok(flag) => flag,
+                        Err(e) => { error!("Invalid format for bool flag: {}", e); std::process::exit(1)}
+                    }}));
+                }
+                else if let Some(matches) = matches.subcommand_matches("send") {
+                    //////////////////////// CAN SEND FLAG ///////////////////
+                    svr.connect(false);
+
+                    let (id, data) = rlua::Lua::new().context(|ctx| {
+                        let id: i32 = match ctx.load(&matches.value_of("id").unwrap()).eval() {
+                            Ok(id) => id,
+                            Err(e) => {
+                                error!("Invalid format for CAN id: {}", e);
+                                std::process::exit(1)
+                            }
+                        };
+                        let data: Vec<u8> = match ctx.load(&matches.value_of("data").unwrap()).eval() {
+                            Ok(id) => id,
+                            Err(e) => {
+                                error!("Invalid format for CAN data: {}", e);
+                                std::process::exit(1)
+                            }
+                        };
+                        (id,data)
+                    });
+
                     if matches.is_present("target") {
                         let target = matches.value_of("target").unwrap().parse::<i32>().expect("Invalid target number");
                         svr.send_packet_to(server::can_packet(id, data), target);

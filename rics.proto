@@ -34,6 +34,8 @@ message RICS_Request {
              NULL = 0;
              LIST_SINK = 1;
              WHO_AM_I = 2;
+             SET_FLAG_CAN_BROADCAST = 3;
+             CLEAR_FLAG_CAN_BROADCAST = 4;
              DAEMON_QUIT = 255;
         }
         oneof content {

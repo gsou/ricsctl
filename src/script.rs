@@ -102,8 +102,11 @@ unsafe impl Send for ServerBox {}
 
 impl rlua::UserData for ServerBox {
     fn add_methods<'lua, M: rlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method_mut("send_can", |_, this, (id, dat): (u32,Vec<u8>)| {
-            unsafe {(*this.svr).send_packet(super::server::can_packet(id as i32, dat)); }
+        methods.add_method_mut("send_can", |_, this, (id, dat, dest): (u32,Vec<u8>, Option<i32>)| {
+            match dest {
+                Some(target) => unsafe {(*this.svr).send_packet_to(super::server::can_packet(id as i32, dat), target); }
+                None => unsafe {(*this.svr).send_packet(super::server::can_packet(id as i32, dat)); }
+            }
             Ok(())
         });
     }

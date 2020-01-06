@@ -132,6 +132,22 @@ impl RICSServer {
         self.node
     }
 
+    /// Sets the CAN broadcast flag for the server
+    /// A CAN broadcast active means that when a data packet
+    /// has CAN type, it will be send to every node regardless
+    /// of routing.
+    ///
+    /// The server does not send a confirmation.
+    pub fn set_can_broadcast(&mut self, v: bool) {
+        
+        debug!("Changing can broadcast flag to {}", v);
+
+        let mut msg = rics::RICS_Request::new();
+        msg.set_query(if v { rics::RICS_Request_RICS_Query::SET_FLAG_CAN_BROADCAST } else { rics::RICS_Request_RICS_Query::CLEAR_FLAG_CAN_BROADCAST });
+        msg.write_length_delimited_to_writer(&mut self.socket).expect("SET/CLEAR_FLAG_CAN_BROADCAST fail");
+    }
+
+
     /// Return the currently loaded nodes and their alias
     pub fn list_nodes(&mut self) -> &HashMap<i32, String> {
         debug!("Sending LIST_SINK query");

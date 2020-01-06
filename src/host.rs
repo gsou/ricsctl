@@ -16,23 +16,39 @@ use std::collections::{HashMap};
 use super::rics;
 
 
+/// Contains server permanent state
 pub struct ServerState {
+    /// Flag for if the CAN broadcasting is enabled
+    can_broadcast: bool,
+    /// Internal flag for node id allocation
     node_allocator: i32,
+    /// Holds the self described names of the nodes
     node_names: HashMap<i32, String>,
+    /// Input socket handle
     node_inputs: HashMap<i32, Arc<Mutex<dyn Read + Send + Sync>>>,
+    /// Output socket handle
     node_outputs: HashMap<i32, Arc<Mutex<dyn Write + Send + Sync>>>,
+    /// Current loading routes
     node_routing: HashMap<i32, Vec<i32>>,
 }
 
 impl ServerState {
 
     pub fn new() -> ServerState {
-        ServerState { node_allocator: 0,
-                      node_names: HashMap::new(),
-                      node_inputs: HashMap::new(),
-                      node_outputs: HashMap::new(),
-                      node_routing: HashMap::new(),
+        ServerState {
+            can_broadcast: false,
+            node_allocator: 0,
+            node_names: HashMap::new(),
+            node_inputs: HashMap::new(),
+            node_outputs: HashMap::new(),
+            node_routing: HashMap::new(),
         }
+    }
+
+    fn get_can_broadcast(&self) -> bool {self.can_broadcast}
+
+    fn set_can_broadcast(&mut self, broadcast: bool) {
+        self.can_broadcast = broadcast;
     }
 
     fn get_node_names(&self) -> &HashMap<i32, String> {
@@ -206,10 +222,15 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
                             let mut writer = socket_arc.lock().unwrap();
                             msg.write_length_delimited_to_writer(&mut *writer);
                         },
+                        rics::RICS_Request_RICS_Query::SET_FLAG_CAN_BROADCAST =>
+                            server_state.write().unwrap().set_can_broadcast(true),
+                        rics::RICS_Request_RICS_Query::CLEAR_FLAG_CAN_BROADCAST =>
+                            server_state.write().unwrap().set_can_broadcast(false),
                         rics::RICS_Request_RICS_Query::DAEMON_QUIT => process::exit(2),
                     }
                     ()
                 } else if req.has_data() {
+                    // Packet message, must forward
                     let state = server_state.read().unwrap();
 
                     let mut msg = rics::RICS_Response::new();
@@ -217,17 +238,27 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
                     if let Some(n) = node { data.set_source(n); }
                     msg.set_data(data.clone());
 
-                    for target in if data.has_target() {
-                        vec![data.get_target()]
-                    } else {
-                        node.and_then(|n| state.node_routing.get(&n).cloned()).unwrap_or(vec![])
-                    } {
-                        if let Some(writer) = state.node_outputs.get(&target) {
-                            info!("Forwarding to {}", target);
-                            msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap()));
+                    if state.get_can_broadcast() && data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
+                        // CAN broadcast forwarding
+                        for (n, writer) in state.node_outputs.iter() {
+                            if Some(*n) != node {
+                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap()));
+                            }
                         }
+                    } else {
+                        // Routing forwarding
+                        for target in if data.has_target() {
+                            vec![data.get_target()]
+                        } else {
+                            node.and_then(|n| state.node_routing.get(&n).cloned()).unwrap_or(vec![])
+                        } {
+                            if let Some(writer) = state.node_outputs.get(&target) {
+                                info!("Forwarding to {}", target);
+                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap()));
+                            }
+                        }
+                        ()
                     }
-                    ()
                 } else if req.has_add_route() {
                     let mut state = server_state.write().unwrap();
 
