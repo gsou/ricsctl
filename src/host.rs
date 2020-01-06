@@ -3,6 +3,7 @@
 //use std::fs::{File, remove_file};
 use std::io::{Result, Read, Write};
 //use std::io::{stdout, stdin};
+#[cfg(target_family="unix")]
 use std::os::unix::net::{UnixListener};
 use std::net::TcpListener;
 use std::sync::{RwLock, Arc, Mutex};
@@ -144,6 +145,7 @@ pub fn run_tcp_listener(server_state: Arc<RwLock<ServerState>>, path: impl Into<
 }
 
 /// Start listening for unix socket connections (async)
+#[cfg(target_family="unix")]
 pub fn run_unix_listener(server_state: Arc<RwLock<ServerState>>, path: impl Into<String>) -> JoinHandle<Result<()>> {
     let path = path.into();
 
@@ -165,6 +167,11 @@ pub fn run_unix_listener(server_state: Arc<RwLock<ServerState>>, path: impl Into
         }
         Ok(())
     })
+}
+
+#[cfg(target_family="windows")]
+pub fn run_unix_listener(server_state: Arc<RwLock<ServerState>>, path: impl Into<String>) -> JoinHandle<Result<()>> {
+    panic!("Windows is not compatible with Unix domain sockets");
 }
 
 /// Arbitrary client connection manager

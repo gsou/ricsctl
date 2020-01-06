@@ -159,10 +159,15 @@ fn main() {
 
     // Get server paths
     let mut unix_domain_servers: Vec<&str> = matches.values_of("unix_client").unwrap_or_default().collect();
-    let tcp_servers: Vec<&str> = matches.values_of("tcp").unwrap_or_default().collect();
+    let mut tcp_servers: Vec<&str> = matches.values_of("tcp").unwrap_or_default().collect();
     if tcp_servers.is_empty() && unix_domain_servers.is_empty() {
-        info!("Server path not provided, using default /tmp/rics.socket");
-        unix_domain_servers.push("/tmp/rics.socket");
+        if cfg!(target_family="unix") {
+            info!("Server path not provided, using default /tmp/rics.socket");
+            unix_domain_servers.push("/tmp/rics.socket");
+        } else {
+            info!("Server path not provided, using default localhost:7299");
+            tcp_servers.push("localhost:7299");
+        }
     }
 
     if let Some(matches) = matches.subcommand_matches("start") {
