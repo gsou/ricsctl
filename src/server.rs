@@ -131,6 +131,15 @@ impl RICSServer {
         self.node
     }
 
+    /// Sets the CAN drop rate for the server
+    /// A value of 0 means all messages are forwarded,
+    /// while a value of 1 means that no messages are.
+    pub fn set_can_drop_chance(&mut self, v: f32) {
+        let mut msg = rics::RICS_Request::new();
+        msg.set_can_drop_chance(v);
+        msg.write_length_delimited_to_writer(&mut self.socket).expect("SET_CAN_DROP_CHANCE fail");
+    }
+
     /// Sets the CAN broadcast flag for the server
     /// A CAN broadcast active means that when a data packet
     /// has CAN type, it will be send to every node regardless

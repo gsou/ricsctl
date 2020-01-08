@@ -47,7 +47,7 @@ message RICS_Request {
               RICS_Data data = 4; // Messages
               RICS_Route add_route = 5;
               RICS_Route del_route = 6;
-              // TODO Rerouting commands
+              float can_drop_chance = 7; // Chance of dropping a can message. 
         }
 }
 

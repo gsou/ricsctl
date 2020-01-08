@@ -15,12 +15,18 @@ use protobuf::{Message, CodedInputStream};
 
 use std::collections::{HashMap};
 use super::rics;
+use rand;
+use rand::Rng;
 
 
 /// Contains server permanent state
 pub struct ServerState {
     /// Flag for if the CAN broadcasting is enabled
     can_broadcast: bool,
+    /// Determines the likelyhood of a CAN message being dropped
+    /// in CAN mode, if a message is dropped, no one receives the
+    /// message
+    can_drop_chance: f32,
     /// Internal flag for node id allocation
     node_allocator: i32,
     /// Holds the self described names of the nodes
@@ -38,6 +44,7 @@ impl ServerState {
     pub fn new() -> ServerState {
         ServerState {
             can_broadcast: false,
+            can_drop_chance: 0.00,
             node_allocator: 0,
             node_names: HashMap::new(),
             node_inputs: HashMap::new(),
@@ -118,6 +125,15 @@ impl ServerState {
             None => (),
         }
     }
+
+    fn set_can_drop_chance(&mut self, v: f32) {
+        if v >= 0.0 && v <= 1.0 {
+            self.can_drop_chance = v;
+            info!("Changing CAN drop rate to {}", v);
+        } else {
+            warn!("Invalid CAN drop value: {}", v);
+        }
+    }
 }
 
 /// Start listening for tcp socket connections (async)
@@ -180,6 +196,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
     // Initialize node if needed
     let socket_arc = Arc::new(Mutex::new(socket));
     let mut node = None;
+    let mut rng = rand::thread_rng();
 
     if let Ok(connection) = input_stream.read_message::<rics::RICS_Connection>() {
         if connection.get_connect_as_node() {
@@ -245,6 +262,15 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
                     if let Some(n) = node { data.set_source(n); }
                     msg.set_data(data.clone());
 
+                    // Broadcast Dropping
+                    if state.can_drop_chance != 0.0 && data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
+                        if rng.gen::<f32>() < state.can_drop_chance {
+                            continue;
+                        }
+                    }
+                    
+
+                    // Forwarding
                     if state.get_can_broadcast() && data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
                         // CAN broadcast forwarding
                         for (n, writer) in state.node_outputs.iter() {
@@ -280,6 +306,9 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
                     let j = req.get_del_route().get_to();
 
                     state.del_route(i, j);
+                } else if req.has_can_drop_chance() {
+                    let mut state = server_state.write().unwrap();
+                    state.set_can_drop_chance( req.get_can_drop_chance() );
                 } else {
                     warn!("Invalid message {:?}", req);
                 }

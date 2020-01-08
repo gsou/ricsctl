@@ -6,6 +6,7 @@ extern crate serialport;
 extern crate libloading;
 extern crate libc;
 extern crate rlua;
+extern crate rand;
 
 mod script;
 mod server;
@@ -16,6 +17,7 @@ use host::ServerState;
 use std::fs::File;
 use std::thread;
 use std::io::{stdout, Read, Write};
+#[cfg(target_family="unix")]
 use std::os::unix::io::FromRawFd;
 use std::sync::{Arc, RwLock, Mutex};
 use clap::{Arg, App, SubCommand};
@@ -116,6 +118,12 @@ fn main() {
                                 .about("Set server's can broadcast flag")
                                 .arg(Arg::with_name("BROADCAST")
                                      .index(1)
+                                     .required(true)))
+                    .subcommand(SubCommand::with_name("drop")
+                                .about("Set server's can chance of dropping a CAN message")
+                                .arg(Arg::with_name("DROP")
+                                     .index(1)
+                                     .help("A lua expression representing a floating point number between 0 and 1")
                                      .required(true)))
                     .subcommand(SubCommand::with_name("send")
                                 .about("Send a can message")
@@ -265,6 +273,14 @@ fn main() {
                     svr.set_can_broadcast(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("BROADCAST").unwrap()).eval() {
                         Ok(flag) => flag,
                         Err(e) => { error!("Invalid format for bool flag: {}", e); std::process::exit(1)}
+                    }}));
+                }
+                else if let Some(matches) = matches.subcommand_matches("drop") {
+                    //////////////////////// CAN DROP CHANCE /////////////////
+                    svr.connect(false);
+                    svr.set_can_drop_chance(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("DROP").unwrap()).eval() {
+                        Ok(f) => f,
+                        Err(e) => { error!("Invalid format for float DROP: {}", e); std::process::exit(1)}
                     }}));
                 }
                 else if let Some(matches) = matches.subcommand_matches("send") {
