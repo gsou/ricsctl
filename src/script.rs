@@ -24,6 +24,11 @@ pub trait ScriptingInterface {
 
 }
 
+#[cfg(target_family="unix")]
+type DynRawSymbol<T> = libloading::os::unix::Symbol<T>;
+#[cfg(target_family="windows")]
+type DynRawSymbol<T> = libloading::os::windows::Symbol<T>;
+
 /// Dynamic library script
 ///
 /// # Functions supported
@@ -44,7 +49,7 @@ pub struct DynlibScript {
     // /// Called after system start
     // on_start: *const unsafe extern fn(i32) -> i32,
     /// Called whenever a can message happen
-    on_can_msg: Option<libloading::os::unix::Symbol<unsafe extern fn(u32, usize, *const u8) -> i32>>,
+    on_can_msg: Option<DynRawSymbol<unsafe extern fn(u32, usize, *const u8) -> i32>>,
     // TODO Other callbacks
 }
 
