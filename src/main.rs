@@ -126,10 +126,10 @@ fn main() {
                                      .required(true)
                                      .help("CAN id"))
                                 .arg(Arg::with_name("data")
-                                .short("d")
-                                .long("data")
-                                .takes_value(true)
-                                .required(true)
+                                     .short("d")
+                                     .long("data")
+                                     .takes_value(true)
+                                     .required(true)
                                      .help("CAN message content"))
                                 .arg(Arg::with_name("target")
                                      .short("t")
@@ -170,7 +170,7 @@ fn main() {
         }
     }
 
-    if let Some(matches) = matches.subcommand_matches("start") {
+    if let Some(_matches) = matches.subcommand_matches("start") {
         ////////////////////// SERVER MODE //////////////////////
         info!("Starting server...");
         let server_state: Arc<RwLock<ServerState>> = Arc::new(RwLock::new(ServerState::new()));
@@ -317,7 +317,7 @@ fn main() {
 
                     // Serial port
                     let mut port = serialport::open(matches.value_of("PORT").unwrap()).expect("Unable to open serialport");
-                    port.set_baud_rate(matches.value_of("BAUD").unwrap_or("115200").parse::<u32>().expect("Invalid baudrate"));
+                    port.set_baud_rate(matches.value_of("BAUD").unwrap_or("115200").parse::<u32>().expect("Invalid baudrate")).expect("Failed to set port baudrate");
                     let mut v = Vec::new();
                     let target = if matches.is_present("target") {
                         Some( matches.value_of("target").unwrap().parse::<i32>().expect("Invalid target number") )
@@ -358,23 +358,25 @@ fn main() {
                 let source_stream = matches.is_present("source_stream");
                 let sink_stream = matches.is_present("sink_stream");
 
-                if !sink_stream {
-                    thread::spawn(move || {
-                        debug!("Starting stdin thread");
-                        // TODO windows compatibility
-                        let mut stdin_handle = unsafe { File::from_raw_fd(0) };
-                        loop {
-                            let mut buffer = [0u8;2048];
-                            let n = stdin_handle.read(&mut buffer[..]).expect("Can't access stdin");
-                            if n>0 {
-                                trace!("Sending packet to server");
-                                let mut svr = svr_copy.lock().unwrap();
-                                svr.send_packet(server::stream_packet(buffer[..n].to_vec()));
-                            } else {
-                                trace!("No bytes received by stdin read");
+                // TODO windows compatibility
+                if cfg!(target_family="unix") {
+                    if !sink_stream {
+                        thread::spawn(move || {
+                            debug!("Starting stdin thread");
+                            let mut stdin_handle = unsafe { File::from_raw_fd(0) };
+                            loop {
+                                let mut buffer = [0u8;2048];
+                                let n = stdin_handle.read(&mut buffer[..]).expect("Can't access stdin");
+                                if n>0 {
+                                    trace!("Sending packet to server");
+                                    let mut svr = svr_copy.lock().unwrap();
+                                    svr.send_packet(server::stream_packet(buffer[..n].to_vec()));
+                                } else {
+                                    trace!("No bytes received by stdin read");
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
 
                 if !source_stream { 
@@ -386,8 +388,8 @@ fn main() {
                         if let Some(p) = packet {
                             if p.get_field_type() == rics::RICS_Data_RICS_DataType::STREAM {
                                 trace!("Sending packet to stdout");
-                                stdout_handle.write_all(p.get_data());
-                                stdout_handle.flush();
+                                stdout_handle.write_all(p.get_data()).expect("Can't write to stdout");
+                                stdout_handle.flush().expect("Can't flust stdout");
                             }
                         }
                     }

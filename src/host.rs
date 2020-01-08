@@ -67,19 +67,19 @@ impl ServerState {
         self.node_routing.remove(&node);
     }
 
-    fn new_node_raw<T>(&mut self, nameOp: Option<T>, isOp: Option<Arc<Mutex<dyn Read + Send + Sync>>>, osOp: Option<Arc<Mutex<dyn Write + Send + Sync>>>) -> i32 where T: Into<String> {
+    fn new_node_raw<T>(&mut self, name_op: Option<T>, is_op: Option<Arc<Mutex<dyn Read + Send + Sync>>>, os_op: Option<Arc<Mutex<dyn Write + Send + Sync>>>) -> i32 where T: Into<String> {
         let n = self.node_allocator;
         self.node_allocator += 1;
-        if let Some(is) = isOp {
+        if let Some(is) = is_op {
             self.node_inputs.insert(n, is);
         };
 
-        match nameOp {
+        match name_op {
             Some(name) => self.node_names.insert(n, name.into()),
             None => self.node_names.insert(n, n.to_string()),
         };
 
-        if let Some(os) = osOp {
+        if let Some(os) = os_op {
             self.node_outputs.insert(n, os);
         }
 
@@ -175,13 +175,13 @@ pub fn run_unix_listener(server_state: Arc<RwLock<ServerState>>, path: impl Into
 }
 
 /// Arbitrary client connection manager
-fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream: &mut CodedInputStream) where T: 'static+Read+Write+Sync+Send {
+fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream: &mut CodedInputStream) where T: 'static+Read+Write+Sync+Send {
     debug!("New client connection accepted");
     // Initialize node if needed
-    let mut socket_arc = Arc::new(Mutex::new(socket));
+    let socket_arc = Arc::new(Mutex::new(socket));
     let mut node = None;
 
-    if let Ok(connection) = inputStream.read_message::<rics::RICS_Connection>() {
+    if let Ok(connection) = input_stream.read_message::<rics::RICS_Connection>() {
         if connection.get_connect_as_node() {
             let mut state = server_state.write().unwrap();
             let nd = state.new_node(socket_arc.clone(), socket_arc.clone());
@@ -194,7 +194,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
 
     // Message managing loop
     loop {
-        match inputStream.read_message::<rics::RICS_Request>() {
+        match input_stream.read_message::<rics::RICS_Request>() {
             Ok(req) => {
                 info!("Server received message {:?}", req);
 
@@ -209,7 +209,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
 
                             let state = server_state.read().unwrap();
 
-                            let mut response = rics::RICS_Response::new();
+                            let response = rics::RICS_Response::new();
                             let mut idlist = rics::RICS_Response_RICS_IdList::new();
                             let ids: Vec<_> = state.get_node_names().iter().map(|(k,v)| {
                                 let mut id = rics::RICS_Response_RICS_Id::new();
@@ -220,14 +220,14 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
                             idlist.set_ids(protobuf::RepeatedField::from_vec(ids));
 
                             let mut writer = socket_arc.lock().unwrap();
-                            response.write_length_delimited_to_writer(&mut *writer);
+                            response.write_length_delimited_to_writer(&mut *writer).expect("Socket error");
                         },
                         rics::RICS_Request_RICS_Query::WHO_AM_I => {
                             debug!("Answer WHO_AM_I request with {:?}", node);
                             let mut msg = rics::RICS_Response::new();
                             node.map(|n| msg.set_node(n));
                             let mut writer = socket_arc.lock().unwrap();
-                            msg.write_length_delimited_to_writer(&mut *writer);
+                            msg.write_length_delimited_to_writer(&mut *writer).expect("Socket error");
                         },
                         rics::RICS_Request_RICS_Query::SET_FLAG_CAN_BROADCAST =>
                             server_state.write().unwrap().set_can_broadcast(true),
@@ -249,7 +249,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
                         // CAN broadcast forwarding
                         for (n, writer) in state.node_outputs.iter() {
                             if Some(*n) != node {
-                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap()));
+                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap())).expect("Socket error");
                             }
                         }
                     } else {
@@ -261,7 +261,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, inputStream:
                         } {
                             if let Some(writer) = state.node_outputs.get(&target) {
                                 info!("Forwarding to {}", target);
-                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap()));
+                                msg.write_length_delimited_to_writer(&mut *(writer.lock().unwrap())).expect("Socket error");
                             }
                         }
                         ()

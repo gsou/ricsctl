@@ -11,16 +11,16 @@ pub trait ScriptingInterface {
     fn initialize(&self) -> bool { true }
 
     /// Called just after server start
-    fn start(&self, svr: &mut RICSServer, node: i32) -> bool { true }
+    fn start(&self, _svr: &mut RICSServer, _node: i32) -> bool { true }
 
     /// Can message rx callback
-    fn can_rx(&self, svr: &mut RICSServer, id: u32, data: Vec<u8>) -> bool { true }
+    fn can_rx(&self, _svr: &mut RICSServer, _id: u32, _data: Vec<u8>) -> bool { true }
 
     /// Generic slave update loop called as often as possible.
     /// This function should return as soon as possible if low latency is required.
     /// This function is only called when there is no more callbacks to call,
     /// so this can never be called in some cases if traffic is high.
-    fn update(&self, svr: &mut RICSServer) -> bool { true }
+    fn update(&self, _svr: &mut RICSServer) -> bool { true }
 
 }
 
@@ -84,16 +84,16 @@ impl ScriptingInterface for DynlibScript {
     fn initialize(&self) -> bool {
         0 != unsafe {(&*self.lib.get::<fn() -> i32>(b"rics_init").unwrap())()}
     }
-    fn start(&self, svr: &mut RICSServer, node: i32) -> bool {
+    fn start(&self, _svr: &mut RICSServer, node: i32) -> bool {
         0 != unsafe {(&*self.lib.get::<fn(i32) -> i32>(b"rics_start").unwrap())(node)}
     }
-    fn can_rx(&self, svr: &mut RICSServer, id: u32, data: Vec<u8>) -> bool {
+    fn can_rx(&self, _svr: &mut RICSServer, id: u32, data: Vec<u8>) -> bool {
         let len = data.len();
         0 != unsafe {(&*self.on_can_msg.as_ref().unwrap())(id, len, data.as_ptr())}
     }
 
     /// No update function is implemented since a thread can simply be created in the start phase.
-    fn update(&self, svr: &mut RICSServer) -> bool {
+    fn update(&self, _svr: &mut RICSServer) -> bool {
         true
     }
 }

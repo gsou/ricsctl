@@ -8,11 +8,10 @@ use std::net::TcpStream;
 use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver};
 use super::rics;
-use super::rlua::{UserData, UserDataMethods};
 
 pub struct RICSServer {
-    input: Box<Read + Sync + Send>,
-    socket: Box<Write + Sync + Send>,
+    input: Box<dyn Read + Sync + Send>,
+    socket: Box<dyn Write + Sync + Send>,
     //input: CodedInputStream<'a>,
     //output: CodedOutputStream<'a>,
     node_names: HashMap<i32, String>,
@@ -55,8 +54,8 @@ impl RICSServer {
     /// Returns the default Unix domain connection type
     pub fn default_socket() -> UnixStream {
         let socket = UnixStream::connect("/tmp/rics.socket").expect("Failed to connect to server");
-        socket.set_read_timeout(Some(Duration::new(1,0)));
-        socket.set_write_timeout(Some(Duration::new(1,0)));
+        socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+        socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
         socket
     }
 
@@ -80,14 +79,14 @@ impl RICSServer {
             ConnectTo::Default => RICSServer::new(),
             ConnectTo::Unix(path) => {
                 let socket = UnixStream::connect(path).expect("Failed to connect to server");
-                socket.set_read_timeout(Some(Duration::new(1,0)));
-                socket.set_write_timeout(Some(Duration::new(1,0)));
+                socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+                socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
                 RICSServer::new_from(socket.try_clone().unwrap(), socket)
             },
             ConnectTo::Tcp(path) => {
                 let socket = TcpStream::connect(path).expect("Failed to connect to server");
-                socket.set_read_timeout(Some(Duration::new(1,0)));
-                socket.set_write_timeout(Some(Duration::new(1,0)));
+                socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+                socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
                 RICSServer::new_from(socket.try_clone().unwrap(), socket)
             }
         };
@@ -288,7 +287,7 @@ impl RICSServer {
             let mut input = CodedInputStream::new(&mut input_reader);
             loop {
                 if let Ok(resp) = input.read_message::<rics::RICS_Response>() {
-                    tx.send(resp);
+                    tx.send(resp).expect("Brocken listen_response channel");
                 }
             }
         });
