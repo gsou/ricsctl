@@ -375,6 +375,8 @@ fn main() {
                 let sink_stream = matches.is_present("sink_stream");
 
                 // TODO windows compatibility
+                #[cfg(target_family="unix")]
+                {
                 if cfg!(target_family="unix") {
                     if !sink_stream {
                         thread::spawn(move || {
@@ -393,6 +395,7 @@ fn main() {
                             }
                         });
                     }
+                }
                 }
 
                 if !source_stream { 

@@ -265,6 +265,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
                     // Broadcast Dropping
                     if state.can_drop_chance != 0.0 && data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
                         if rng.gen::<f32>() < state.can_drop_chance {
+                            info!("Server is dropping packet {:?}", data);
                             continue;
                         }
                     }

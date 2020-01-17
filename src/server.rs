@@ -3,11 +3,15 @@
 use std::io::{Read, Write};
 use std::collections::HashMap;
 use protobuf::{Message, CodedInputStream};
+#[cfg(target_family="unix")]
 use std::os::unix::net::{UnixStream};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver};
 use super::rics;
+
+#[cfg(target_family="windows")]
+type UnixStream = TcpStream;
 
 pub struct RICSServer {
     input: Box<dyn Read + Sync + Send>,
@@ -52,8 +56,18 @@ pub enum ConnectTo {
 impl RICSServer {
 
     /// Returns the default Unix domain connection type
+    #[cfg(target_family="unix")]
     pub fn default_socket() -> UnixStream {
-        let socket = UnixStream::connect("/tmp/rics.socket").expect("Failed to connect to server");
+       let socket = UnixStream::connect("/tmp/rics.socket").expect("Failed to connect to server");
+       socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+       socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+       socket
+    }
+
+    /// Returns the default Unix domain connection type
+    #[cfg(target_family="windows")]
+    pub fn default_socket() -> TcpStream {
+        let socket = TcpStream::connect("localhost:7899").expect("Failed to connect to server");
         socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
         socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
         socket
@@ -61,14 +75,14 @@ impl RICSServer {
 
     /// New server connection using default settings
     pub fn new() -> RICSServer {
-        let socket = RICSServer::default_socket();
+       let socket = RICSServer::default_socket();
 
-        RICSServer {
-            input: Box::new(socket.try_clone().unwrap()),
-            socket: Box::new(socket),
-            node_names: HashMap::new(),
-            node: 0,
-        }
+       RICSServer {
+           input: Box::new(socket.try_clone().unwrap()),
+           socket: Box::new(socket),
+           node_names: HashMap::new(),
+           node: 0,
+       }
     }
 
     /// CPS server creation
@@ -78,10 +92,14 @@ impl RICSServer {
         let server = match ct {
             ConnectTo::Default => RICSServer::new(),
             ConnectTo::Unix(path) => {
-                let socket = UnixStream::connect(path).expect("Failed to connect to server");
-                socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
-                socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
-                RICSServer::new_from(socket.try_clone().unwrap(), socket)
+                if cfg!(target_family="unix") {
+                    let socket = UnixStream::connect(path).expect("Failed to connect to server");
+                    socket.set_read_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+                    socket.set_write_timeout(Some(Duration::new(1,0))).expect("Can't change socket param");
+                    RICSServer::new_from(socket.try_clone().unwrap(), socket)
+                } else {
+                    panic!("Unix sockets are not supported on Windows")
+                }
             },
             ConnectTo::Tcp(path) => {
                 let socket = TcpStream::connect(path).expect("Failed to connect to server");
