@@ -63,6 +63,7 @@ impl ServerState {
         &self.node_names
     }
 
+
     fn delete_node(&mut self, node: i32) {
         if node + 1 == self.node_allocator {
             self.node_allocator -= 1;
@@ -103,9 +104,15 @@ impl ServerState {
         self.new_node_raw::<String>(None, None, Some(os))
     }
 
+    fn set_node_name(&mut self, node: i32, name: impl Into<String>) {
+        let str = name.into();
+        trace!("Setting node {} to name {}", node, str.clone());
+        self.node_names.insert(node, str);
+    }
+
     fn rename_node(&mut self, node: i32, name: impl Into<String>) -> bool {
         if self.node_names.contains_key(&node) {
-            self.node_names.insert(node, name.into());
+            self.set_node_name(node, name);
             true
         } else {
             false
@@ -202,6 +209,7 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
         if connection.get_connect_as_node() {
             let mut state = server_state.write().unwrap();
             let nd = state.new_node(socket_arc.clone(), socket_arc.clone());
+            state.set_node_name(nd, format!("{}",nd)); // Default name
             node = Some(nd);
             debug!("Creating node id {}", nd);
         } else {
@@ -226,15 +234,17 @@ fn run_client<T>(server_state: Arc<RwLock<ServerState>>, socket: T, input_stream
 
                             let state = server_state.read().unwrap();
 
-                            let response = rics::RICS_Response::new();
+                            let mut response = rics::RICS_Response::new();
                             let mut idlist = rics::RICS_Response_RICS_IdList::new();
                             let ids: Vec<_> = state.get_node_names().iter().map(|(k,v)| {
                                 let mut id = rics::RICS_Response_RICS_Id::new();
                                 id.set_id(*k);
                                 id.set_name(v.clone());
+                                trace!("Reply node pair: {} - {}", *k, v.clone());
                                 id
                             }).collect();
                             idlist.set_ids(protobuf::RepeatedField::from_vec(ids));
+                            response.set_idlist(idlist);
 
                             let mut writer = socket_arc.lock().unwrap();
                             response.write_length_delimited_to_writer(&mut *writer).expect("Socket error");

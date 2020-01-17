@@ -188,7 +188,7 @@ impl RICSServer {
             Ok(resp) => resp.get_idlist().get_ids().iter().map(|id| (id.get_id(),id.get_name().into())).collect(),
             Err(err) => { warn!("LIST_SINK bad response: {}", err); HashMap::new() },
         };
-        trace!("Done processing response");
+        trace!("Done processing response, got {:?}", self.node_names);
         &self.node_names
     }
 

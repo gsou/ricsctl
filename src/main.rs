@@ -255,6 +255,13 @@ fn main() {
                     }
                 }
 
+            } else if let Some(_matches) = matches.subcommand_matches("list") {
+                //////////////////////// LIST /////////////////////////////
+                svr.connect(false);
+                svr.list_nodes();
+                for (number, name) in svr.list_nodes() {
+                    println!("{} \t{}", number, name);
+                }
             } else if let Some(matches) = matches.subcommand_matches("route") {
                 /////////////////////// ROUTING //////////////////////////
                 svr.connect(false);
