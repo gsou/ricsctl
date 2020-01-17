@@ -72,11 +72,11 @@ fn main() {
                          .help("Dynamic library plugin for advanced processing on clients")
                          .takes_value(true)))
         .subcommand(SubCommand::with_name("list")
-                    .about("List available nodes and their names")) // TODO
+                    .about("List available nodes and their names"))
         .subcommand(SubCommand::with_name("start")
                     .about("Start a server with given connections"))
         .subcommand(SubCommand::with_name("stop")
-                    .about("Close the RICS server")) // TODO
+                    .about("Close the RICS server"))
         .subcommand(SubCommand::with_name("stream")
                     .about("Transit through stdout and stdin")
                     .arg(Arg::with_name("source_stream")
@@ -272,8 +272,12 @@ fn main() {
                 for d in dests {
                     if delete {svr.del_route(source, d);} else {svr.add_route(source, d);}
                 }
-            }
-            else if let Some(matches) = matches.subcommand_matches("can") {
+            } else if let Some(_matches) = matches.subcommand_matches("stop") {
+                //////////////////////////////// STOP ////////////////////////
+                svr.connect(false);
+                svr.stop_server();
+                
+            } else if let Some(matches) = matches.subcommand_matches("can") {
                 if let Some(matches) = matches.subcommand_matches("broadcast") {
                     //////////////////////// CAN BROADCAST FLAG ///////////////////
                     svr.connect(false);

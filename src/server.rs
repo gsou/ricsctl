@@ -192,6 +192,14 @@ impl RICSServer {
         &self.node_names
     }
 
+    /// Stops the parent server
+    pub fn stop_server(&mut self) {
+        debug!("Stopping server");
+        let mut msg = rics::RICS_Request::new();
+        msg.set_query(rics::RICS_Request_RICS_Query::DAEMON_QUIT);
+        msg.write_length_delimited_to_writer(&mut self.socket).expect("DAEMON_QUIT query message fail");
+    }
+
     pub fn node_from_string_cached(&self, str: impl Into<String>) -> Option<i32> {
         let str = str.into();
         str.parse::<i32>().ok().and_then(|n| n.get_name_cached(self)).or_else(|| str.get_name_cached(self))
