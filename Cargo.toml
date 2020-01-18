@@ -24,6 +24,8 @@ libc = "0.2"
 rand = "0.7.2"
 rlua = "0.17.0"
 
+[target.'cfg(unix)'.dependencies]
+socketcan = "1.7.0"
 
 [build-dependencies]
 protoc-rust = "2.0"

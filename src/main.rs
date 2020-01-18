@@ -7,6 +7,10 @@ extern crate libloading;
 extern crate libc;
 extern crate rlua;
 extern crate rand;
+#[cfg(target_family="unix")]
+extern crate socketcan;
+#[cfg(target_family="unix")]
+use std::os::unix::io::AsRawFd;
 
 mod script;
 mod server;
@@ -21,6 +25,7 @@ use std::io::{stdout, Read, Write};
 use std::os::unix::io::FromRawFd;
 use std::sync::{Arc, RwLock, Mutex};
 use clap::{Arg, App, SubCommand};
+use std::convert::TryInto;
 
 #[derive(Debug)]
 struct Packet {
@@ -28,7 +33,6 @@ struct Packet {
     dim: u8,
     dat: [u8; 8]
 }
-
 
 fn main() {
     env_logger::init();
@@ -125,6 +129,12 @@ fn main() {
                                      .index(1)
                                      .help("A lua expression representing a floating point number between 0 and 1")
                                      .required(true)))
+                    .subcommand(SubCommand::with_name("connect")
+                                .about("Connect a socketcan interface to the network")
+                                .arg(Arg::with_name("CANIFACE")
+                                     .index(1)
+                                     .required(true)
+                                     .help("The socketcan interface name")))
                     .subcommand(SubCommand::with_name("send")
                                 .about("Send a can message")
                                 .arg(Arg::with_name("id")
@@ -293,6 +303,47 @@ fn main() {
                         Ok(f) => f,
                         Err(e) => { error!("Invalid format for float DROP: {}", e); std::process::exit(1)}
                     }}));
+                }
+                else if let Some(matches) = matches.subcommand_matches("connect") {
+                    /////////////////////// CAN CONNECT /////////////////////
+                    svr.connect(true);
+                    let node = svr.who_am_i();
+                    println!("Logging on node id {}", node);
+
+                    #[cfg(target_family="unix")]
+                    {
+                        let socketcan = socketcan::CANSocket::open(matches.value_of("CANIFACE").unwrap()).expect("Can't connect to CAN iface");
+                        let socketcan_tx = unsafe { socketcan::CANSocket::from_raw_fd(socketcan.as_raw_fd()) };
+                        let resp = svr.listen_response();
+                        thread::spawn(move|| {
+                            loop {
+                                let packet = resp.recv().unwrap();
+                                if packet.has_data() {
+                                    let data = packet.get_data();
+                                    if data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
+                                        let frame = socketcan::CANFrame::new(data.get_id().try_into().unwrap(), &data.get_data(), false, false).expect("Can't create CAN frame");
+                                        socketcan_tx.write_frame_insist(&frame).expect("Can't send CAN frame");
+                                    }
+                                }
+                            }
+                        });
+
+                        loop {
+
+                            if let Ok(frame) = socketcan.read_frame() {
+                                trace!("FrameRx: {}, {:?}", frame.id(), frame.data());
+                                svr.send_packet(server::can_packet(frame.id().try_into().unwrap(), frame.data().to_vec()));
+                            }
+
+                        }
+
+
+                    }
+
+                    #[cfg(target_family="windows")]
+                    {
+                        error!("SocketCAN is not supported on Windows.")
+                    }
                 }
                 else if let Some(matches) = matches.subcommand_matches("send") {
                     //////////////////////// CAN SEND FLAG ///////////////////
