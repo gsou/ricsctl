@@ -345,11 +345,37 @@ fn main() {
                     // Serial port
                     let mut port = serialport::open(matches.value_of("PORT").unwrap()).expect("Unable to open serialport");
                     port.set_baud_rate(matches.value_of("BAUD").unwrap_or("115200").parse::<u32>().expect("Invalid baudrate")).expect("Failed to set port baudrate");
+                    let mut port_tx = port.try_clone().unwrap();
                     let mut v = Vec::new();
                     let target = if matches.is_present("target") {
                         Some( matches.value_of("target").unwrap().parse::<i32>().expect("Invalid target number") )
                     } else { None };
-                    // TODO TX
+
+
+
+                    // Tx thread
+                    let resp = svr.listen_response();
+                    thread::spawn(move|| {
+
+                        loop {
+                            let packet = resp.recv().unwrap();
+                            if packet.has_data() {
+                                let data = packet.get_data();
+                                if data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
+                                    let mut v = vec![0xFAu8];
+                                    v.extend(i32::to_le_bytes(data.get_id()).iter());
+                                    let n = data.get_data().len();
+                                    v.push(n as u8);
+                                    v.extend(data.get_data()[0..n].iter());
+                                    trace!("Logging: {:?}", &v);
+                                    port_tx.write(&v).expect("Can't forward message to serial");
+                                }
+                            }
+                        }
+
+                    });
+
+                    // Rx thread
                     loop {
                         let mut buf = [0u8;128];
                         if let Ok(len) = port.read(&mut buf) {
