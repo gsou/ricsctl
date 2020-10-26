@@ -22,7 +22,7 @@ serialport = "3.3.0"
 libloading = "0.5.2"
 libc = "0.2"
 rand = "0.7.2"
-rlua = "0.17.0"
+rlua = { git = "https://github.com/gsou/rlua.git" }
 
 [target.'cfg(unix)'.dependencies]
 socketcan = "1.7.0"
