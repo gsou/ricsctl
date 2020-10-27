@@ -193,21 +193,25 @@ fn main() {
         info!("Starting server...");
         let server_state: Arc<RwLock<ServerState>> = Arc::new(RwLock::new(ServerState::new()));
 
+        let mut last = None;
         // Starting connecton points
         for unix in unix_domain_servers {
             info!("Launching Unix Domain listener on {}", unix.clone());
-            host::run_unix_listener(server_state.clone(), unix);
+            let handle = host::run_unix_listener(server_state.clone(), unix);
+            last = Some(handle);
         }
 
         // Starting connection points
         for tcp in tcp_servers {
             info!("Launching TCP listener on {}", tcp.clone());
-            host::run_tcp_listener(server_state.clone(), tcp);
+            let handle = host::run_tcp_listener(server_state.clone(), tcp);
+            last = Some(handle);
         }
 
         info!("...Server started");
-        loop {}
-
+        if let Some(h) = last {
+            h.join().unwrap().unwrap();
+        }
     } else {
         ////////////////////// CLIENT MODE //////////////////////
 
