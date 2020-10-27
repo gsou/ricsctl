@@ -10,8 +10,8 @@ extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
 #[cfg(target_family="unix")]
-use std::time::SystemTime;
 use std::os::unix::io::AsRawFd;
+use std::time::SystemTime;
 
 mod script;
 mod server;
