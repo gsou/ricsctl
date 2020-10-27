@@ -3,6 +3,7 @@
 use super::libloading::{Library, Symbol};
 use super::rlua;
 use super::server::RICSServer;
+use std::sync::Mutex;
 use std;
 
 pub trait ScriptingInterface {
@@ -23,6 +24,12 @@ pub trait ScriptingInterface {
     fn update(&self, _svr: &mut RICSServer) -> bool { true }
 
 }
+
+pub struct ScriptingInterfaceWrapper {
+    pub iface : Mutex<Box<dyn ScriptingInterface>>
+}
+unsafe impl Send for ScriptingInterfaceWrapper {}
+unsafe impl Sync for ScriptingInterfaceWrapper {}
 
 #[cfg(target_family="unix")]
 type DynRawSymbol<T> = libloading::os::unix::Symbol<T>;

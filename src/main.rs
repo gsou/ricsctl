@@ -10,6 +10,7 @@ extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
 #[cfg(target_family="unix")]
+use std::time::SystemTime;
 use std::os::unix::io::AsRawFd;
 
 mod script;
@@ -21,6 +22,7 @@ use host::ServerState;
 use std::fs::File;
 use std::thread;
 use std::io::{stdout, Read, Write};
+use std::time::Duration;
 #[cfg(target_family="unix")]
 use std::os::unix::io::FromRawFd;
 use std::sync::{Arc, RwLock, Mutex};
@@ -225,16 +227,16 @@ fn main() {
             if let Some(matches) = matches.subcommand_matches("plugin") {
                 trace!("Loading plugin engine...");
                 // Load plugin engine
-                let engine: Box<dyn script::ScriptingInterface> = if matches.is_present("dynlib") {
-                    Box::new(script::DynlibScript::new(matches.value_of("dynlib").unwrap().to_string()).load())
+                let engine: script::ScriptingInterfaceWrapper = if matches.is_present("dynlib") {
+                    script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::DynlibScript::new(matches.value_of("dynlib").unwrap().to_string()).load())) }
                 } else if matches.is_present("lua") {
-                    Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))
+                    script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))) }
                 } else {
-                    Box::new(script::NoEngine)
+                    script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::NoEngine))}
                 };
 
                 trace!("Initializing plugin engine...");
-                if !engine.initialize() {
+                if !engine.iface.lock().unwrap().initialize() {
                     error!("Plugin engine initialization failed");
                 }
 
@@ -246,28 +248,49 @@ fn main() {
                 info!("Connecting on node id {}", node);
 
                 trace!("Starting plugin engine...");
-                if !engine.start(&mut svr, node) {
+
+                if !engine.iface.lock().unwrap().start(&mut svr, node) {
                     error!("Plugin engine start failed");
                 }
 
                 let rx = svr.listen_response();
 
-                let mut update_enabled = true;
+                let svr_arc = Arc::new(Mutex::new(svr));
+                let svr_update = svr_arc.clone();
+
+
+                let engine_arc = Arc::new(engine);
+                let engine_update = engine_arc.clone();
+
+                thread::spawn(move || {
+                    let freq = Duration::from_millis(33);
+                    loop {
+                        let now = SystemTime::now();
+                        {
+                            trace!("Update plugin");
+                            engine_update.iface.lock().unwrap().update(&mut svr_update.lock().unwrap());
+                        }
+                        let wait = match now.elapsed() {
+                            Ok(elapsed) => { if elapsed < freq { Some(freq - elapsed) } else { None } },
+                            Err(_) => None,
+                        };
+                        if let Some(wait) = wait { thread::sleep(wait); }
+                    }
+                });
+
                 loop {
-                    if let Ok(resp) = rx.try_recv() {
+                    if let Ok(resp) = rx.recv() {
                         if resp.has_data() {
                             let p = resp.get_data();
                             if p.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
                                 info!("Sending can message {} to plugin", p.get_id());
-                                engine.can_rx(&mut svr, p.get_id() as u32, p.get_data().to_vec());
+                                engine_arc.iface.lock().unwrap().can_rx(&mut svr_arc.lock().unwrap(), p.get_id() as u32, p.get_data().to_vec());
                             }
 
-                            update_enabled = true
                         }
-                    } else if update_enabled {
-                        update_enabled = engine.update(&mut svr);
                     }
                 }
+
 
             } else if let Some(_matches) = matches.subcommand_matches("list") {
                 //////////////////////// LIST /////////////////////////////
