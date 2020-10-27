@@ -1,12 +1,13 @@
 [package]
 name = "rics"
 description = "Remote Inter-Connected Streams - datastream and bus routing"
-version = "0.2.0"
+version = "0.2.1"
 homepage = "https://github.com/gsou/ricsctl"
 authors = ["Skami"]
 license = "MIT"
 edition = "2018"
 readme = "README.md"
+documentation = "https://docs.rs/rics"
 
 [lib]
 name = "rics"
