@@ -133,6 +133,11 @@ fn main() {
                                      .required(true)))
                     .subcommand(SubCommand::with_name("connect")
                                 .about("Connect a socketcan interface to the network")
+                                .arg(Arg::with_name("extended")
+                                     .required(false)
+                                     .short("e")
+                                     .long("ext")
+                                     .help("Send messages as extended messages by default"))
                                 .arg(Arg::with_name("CANIFACE")
                                      .index(1)
                                      .required(true)
@@ -337,6 +342,8 @@ fn main() {
                     let node = svr.who_am_i();
                     println!("Logging on node id {}", node);
 
+                    let eff_field = if matches.is_present("extended") {socketcan::EFF_FLAG} else {0u32};
+
                     #[cfg(target_family="unix")]
                     {
                         let socketcan = socketcan::CANSocket::open(matches.value_of("CANIFACE").unwrap()).expect("Can't connect to CAN iface");
@@ -348,7 +355,7 @@ fn main() {
                                 if packet.has_data() {
                                     let data = packet.get_data();
                                     if data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
-                                        let frame = socketcan::CANFrame::new(data.get_id().try_into().unwrap(), &data.get_data(), false, false).expect("Can't create CAN frame");
+                                        let frame = socketcan::CANFrame::new((data.get_id() as u32) | eff_field, &data.get_data(), false, false).expect("Can't create CAN frame");
                                         socketcan_tx.write_frame_insist(&frame).expect("Can't send CAN frame");
                                     }
                                 }
