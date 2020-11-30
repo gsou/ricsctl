@@ -10,6 +10,9 @@ extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
 #[cfg(target_family="unix")]
+extern crate gtk;
+extern crate glib;
+extern crate gio;
 use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
 
@@ -17,6 +20,7 @@ mod script;
 mod server;
 mod rics;
 mod host;
+mod gui;
 use host::ServerState;
 
 use std::fs::File;
@@ -181,6 +185,8 @@ fn main() {
                                      .help("Node target for the messages")))
         ) .get_matches();
 
+    // TODO Integrate option
+    gui::gui_main();
 
     // Get server paths
     let mut unix_domain_servers: Vec<&str> = matches.values_of("unix_client").unwrap_or_default().collect();
