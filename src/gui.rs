@@ -111,24 +111,73 @@ pub fn gui_main() {
     let window = Rc::new(RefCell::new(builder.get_object::<gtk::Window>("RICSWIN").unwrap()));
     let can_store = Rc::new(RefCell::new(builder.get_object::<gtk::ListStore>("can_store").unwrap()));
     let tree_view = Rc::new(RefCell::new(builder.get_object::<gtk::TreeView>("tree_view").unwrap()));
-    let filter_cont = Rc::new(RefCell::new(builder.get_object::<gtk::CheckMenuItem>("filter_cont").unwrap()));
+    let filter_cont = Rc::new(builder.get_object::<gtk::CheckMenuItem>("filter_cont").unwrap());
+    let status = Rc::new(builder.get_object::<gtk::Statusbar>("status").unwrap());
 
     // Server connect
     let server_clone = Rc::clone(&server);
+    let status_clone = Rc::clone(&status);
     builder.get_object::<gtk::MenuItem>("svr_conn_def").unwrap().connect_activate(move |_| {
         let mut svr: RefMut<_> = server_clone.borrow_mut();
         *svr = server::RICSServer::new().ok();
         if svr.is_none() {
             warn!("Could not connect to default server");
+            status_clone.push(0, "Error ! Could not connect to server");
         }
-        svr.as_mut().map(|s|s.connect(true));
+        svr.as_mut().map(|s| {status_clone.push(0, "Connected to server"); s.connect(true); });
     });
 
+    // File
+
+    let can_store_clone = Rc::clone(&can_store);
+    builder.get_object::<gtk::MenuItem>("file_new").unwrap().connect_activate(move |_| {can_store_clone.borrow().clear();});
+
+    let window_clone = Rc::clone(&window);
+    let can_store_clone = Rc::clone(&can_store);
+    let tree_view_clone = Rc::clone(&tree_view);
+    builder.get_object::<gtk::MenuItem>("file_open").unwrap().connect_activate(move |_| {(|| -> Option<()> {
+        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Open File", "Open") {
+            let mut rdr = csv::Reader::from_path(file).unwrap();
+            let can_store = can_store_clone.borrow_mut();
+
+            can_store.clear();
+
+
+            debug!("Opening file");
+            for result in rdr.records() {
+                let record = result.ok()?;
+                trace!("Record {:?}", record);
+
+                can_store.insert_with_values(None, &(0..12 as u32).collect::<Vec<_>>()[..],
+                                             &[&record.get(1).unwrap().to_string(),
+                                               &record.get(2).unwrap().to_string(),
+                                               &record.get(3).unwrap_or("").to_string(),
+                                               &record.get(4).unwrap_or("").to_string(),
+                                               &record.get(5).unwrap_or("").to_string(),
+                                               &record.get(6).unwrap_or("").to_string(),
+                                               &record.get(7).unwrap_or("").to_string(),
+                                               &record.get(8).unwrap_or("").to_string(),
+                                               &record.get(9).unwrap_or("").to_string(),
+                                               &record.get(10).unwrap_or("").to_string(),
+                                               // Lua parsing of messages
+                                               &record.get(11).unwrap_or("").to_string(),
+                                               &record.get(12).unwrap_or("").to_string(),
+                                             ]);
+
+                let tree_view = tree_view_clone.borrow_mut();
+                tree_view.set_model(Some(&*can_store));
+                trace!("Append Message to interface");
+
+            }
+        }
+        debug!("Done opening file");
+        Some(())
+    })();
+    });
 
     let window_clone = Rc::clone(&window);
     let lua_clone = Rc::clone(&lua);
     builder.get_object::<gtk::MenuItem>("filter_load").unwrap().connect_activate(move |_| {
-        if let Some(file) = dialog_open_file(&window_clone.borrow_mut()) {
         if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Load Script", "Load") {
             load_script(&*lua_clone, file);
         }
@@ -136,18 +185,27 @@ pub fn gui_main() {
 
     let can_store_clone = Rc::clone(&can_store);
     let lua_clone = Rc::clone(&lua);
+    let status_clone = Rc::clone(&status);
     builder.get_object::<gtk::MenuItem>("filter_apply").unwrap().connect_activate(move |_| {
         apply_filter(&*lua_clone, &mut can_store_clone.borrow_mut());
+        status_clone.push(0, "Filtered !");
     });
 
     // Listening thread.
     let conn_fork = builder.get_object::<gtk::MenuItem>("conn_fork").unwrap();
     let server_clone = Rc::clone(&server);
+    let filter_cont_clone = Rc::clone(&filter_cont);
+    let lua_clone = Rc::clone(&lua);
+    let status_clone = Rc::clone(&status);
+    let tree_view_clone = Rc::clone(&tree_view);
     conn_fork.connect_activate(move |_| {
         let mut svr: RefMut<_> = server_clone.borrow_mut();
         if let Some(resp) = svr.as_mut().map(|s|s.listen_response()) {
             let can_store = Rc::clone(&can_store);
-            let tree_view = Rc::clone(&tree_view);
+            let tree_view_clone = Rc::clone(&tree_view_clone);
+            let lua_clone = Rc::clone(&lua_clone);
+            let filter_cont_clone = Rc::clone(&filter_cont);
+            status_clone.push(0, "Starting listening thread");
             gtk::idle_add(move || {
                 if let Ok(packet) = resp.try_recv() {
                     if packet.has_data() {
@@ -160,21 +218,30 @@ pub fn gui_main() {
 
                             let columns = data.get_data().len();
                             let len = data.get_data().len() as u8;
-                            can_store.insert_with_values(None, &(0..12 as u32).collect::<Vec<_>>()[..],
-                                                         &[&format!("{:x}", data.get_id()), &format!("{:x}",len),
-                                                           &data.get_data().get(0).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(1).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(2).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(3).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(4).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(5).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(6).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           &data.get_data().get(7).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
-                                                           // Lua parsing of messages
-                                                           &"".to_string(),
-                                                           &"black".to_string(),
-                                                         ]);
-                            let tree_view = tree_view.borrow_mut();
+
+                            let (fil,parsed,color) = if filter_cont_clone.get_active() {
+                                filter_can(&*lua_clone, data.get_id() as u32, data.get_data().to_vec())
+                            } else {
+                                (true, "".to_string(), "black".to_string())
+                            };
+
+                            if fil {
+                                can_store.insert_with_values(None, &(0..12 as u32).collect::<Vec<_>>()[..],
+                                                             &[&format!("{:x}", data.get_id()), &format!("{:x}",len),
+                                                               &data.get_data().get(0).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(1).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(2).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(3).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(4).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(5).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(6).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               &data.get_data().get(7).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
+                                                               // Lua parsing of messages
+                                                               &parsed,
+                                                               &color,
+                                                             ]);
+                            }
+                            let tree_view = tree_view_clone.borrow_mut();
                             tree_view.set_model(Some(&*can_store));
                             trace!("Append Message to interface");
 
@@ -185,9 +252,6 @@ pub fn gui_main() {
             });
         }
     });
-
-
-
 
 
     // Start application
