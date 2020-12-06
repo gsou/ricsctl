@@ -27,6 +27,7 @@ libc = "0.2"
 rand = "0.7.2"
 rlua = { git = "https://github.com/gsou/rlua.git" }
 csv = "1.1"
+chrono = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 socketcan = "1.7.0"

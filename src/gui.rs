@@ -32,7 +32,7 @@ fn apply_filter(lua: &Lua, can_store: &mut gtk::ListStore) {
     {
         let to_remove = &mut to_remove;
         can_store.foreach(move |m, p, i| {
-            // TODO maybe check for the from_str_radix unwrap
+            // TODO check for the from_str_radix unwrap
             let id = u32::from_str_radix(&m.get_value(i, 0).downcast::<String>().unwrap().get().unwrap(), 16).unwrap();
             let len = u8::from_str_radix(&m.get_value(i, 1).downcast::<String>().unwrap().get().unwrap(), 16).unwrap();
             let mut dat = vec![];
@@ -70,8 +70,8 @@ fn load_script(lua: &Lua, filename: PathBuf) {
     });
 }
 
-fn dialog_open_file(window: &gtk::Window, title: &str, ok: &str) -> Option<PathBuf>{
-    let dialog = gtk::FileChooserDialog::new(Some(title), Some(window), gtk::FileChooserAction::Open);
+fn dialog_open_file(window: &gtk::Window, title: &str, ok: &str, act: gtk::FileChooserAction) -> Option<PathBuf>{
+    let dialog = gtk::FileChooserDialog::new(Some(title), Some(window), act);
     dialog.add_buttons(&[
         (ok, gtk::ResponseType::Ok),
         ("Cancel", gtk::ResponseType::Cancel),
@@ -136,7 +136,7 @@ pub fn gui_main() {
     let can_store_clone = Rc::clone(&can_store);
     let tree_view_clone = Rc::clone(&tree_view);
     builder.get_object::<gtk::MenuItem>("file_open").unwrap().connect_activate(move |_| {(|| -> Option<()> {
-        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Open File", "Open") {
+        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Open File", "Open", gtk::FileChooserAction::Open) {
             let mut rdr = csv::Reader::from_path(file).unwrap();
             let can_store = can_store_clone.borrow_mut();
 
@@ -148,7 +148,7 @@ pub fn gui_main() {
                 let record = result.ok()?;
                 trace!("Record {:?}", record);
 
-                can_store.insert_with_values(None, &(0..12 as u32).collect::<Vec<_>>()[..],
+                can_store.insert_with_values(None, &(0..13 as u32).collect::<Vec<_>>()[..],
                                              &[&record.get(1).unwrap().to_string(),
                                                &record.get(2).unwrap().to_string(),
                                                &record.get(3).unwrap_or("").to_string(),
@@ -162,6 +162,7 @@ pub fn gui_main() {
                                                // Lua parsing of messages
                                                &record.get(11).unwrap_or("").to_string(),
                                                &record.get(12).unwrap_or("").to_string(),
+                                               &record.get(0).unwrap_or("").to_string(),
                                              ]);
 
                 let tree_view = tree_view_clone.borrow_mut();
@@ -178,8 +179,34 @@ pub fn gui_main() {
     let window_clone = Rc::clone(&window);
     let lua_clone = Rc::clone(&lua);
     builder.get_object::<gtk::MenuItem>("filter_load").unwrap().connect_activate(move |_| {
-        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Load Script", "Load") {
+        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Load Script", "Load", gtk::FileChooserAction::Open) {
             load_script(&*lua_clone, file);
+        }
+    });
+
+    let window_clone = Rc::clone(&window);
+    let lua_clone = Rc::clone(&lua);
+    let can_store_clone = Rc::clone(&can_store);
+    let status_clone = Rc::clone(&status);
+    builder.get_object::<gtk::MenuItem>("file_save").unwrap().connect_activate(move |_| {
+        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Save", "Save", gtk::FileChooserAction::Save) {
+            let can_store = can_store_clone.borrow_mut();
+            debug!("Opening file");
+            if let Ok(mut wrt) = csv::Writer::from_path(file) {
+            can_store.foreach(move |m, p, i| {
+                let vec: Vec<String> = [12,0,1,2,3,4,5,6,7,8,9,10,11].iter().map(|n| m.get_value(i, *n).downcast::<String>().unwrap().get().unwrap()).collect();
+                wrt.write_record(&vec[..]).unwrap();
+                wrt.flush();
+                false
+            });
+            debug!("Saving done");
+            status_clone.push(0, "Data saved");
+            } else {
+                error!("Error saving file");
+                status_clone.push(0, "Error ! Data NOT saved");
+
+            }
+
         }
     });
 
@@ -226,7 +253,9 @@ pub fn gui_main() {
                             };
 
                             if fil {
-                                can_store.insert_with_values(None, &(0..12 as u32).collect::<Vec<_>>()[..],
+                                let time = std::time::SystemTime::now();
+                                let datetime: chrono::DateTime<chrono::offset::Local> = time.into();
+                                can_store.insert_with_values(None, &(0..13 as u32).collect::<Vec<_>>()[..],
                                                              &[&format!("{:x}", data.get_id()), &format!("{:x}",len),
                                                                &data.get_data().get(0).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
                                                                &data.get_data().get(1).map(|x|format!("{:x}",x)).unwrap_or("".to_string()),
@@ -239,6 +268,7 @@ pub fn gui_main() {
                                                                // Lua parsing of messages
                                                                &parsed,
                                                                &color,
+                                                               &format!("{}", datetime.format("%Y-%m-%d %T%.3f")),
                                                              ]);
                             }
                             let tree_view = tree_view_clone.borrow_mut();
