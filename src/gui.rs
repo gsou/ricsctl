@@ -93,7 +93,7 @@ fn dialog_open_file(window: &gtk::Window, title: &str, ok: &str, act: gtk::FileC
 
 
 
-pub fn gui_main() {
+pub fn gui_main(opt_svr: Option<server::RICSServer>) {
     if let Err(err) = gtk::init() {
         error!("{}", err);
         return;
@@ -107,7 +107,7 @@ pub fn gui_main() {
 
     // Variables
     // XXX Rc sufficient here ?
-    let server : Rc<RefCell<Option<server::RICSServer>>> = Rc::new(RefCell::new(None));
+    let server : Rc<RefCell<Option<server::RICSServer>>> = Rc::new(RefCell::new(opt_svr));
     let window = Rc::new(RefCell::new(builder.get_object::<gtk::Window>("RICSWIN").unwrap()));
     let can_store = Rc::new(RefCell::new(builder.get_object::<gtk::ListStore>("can_store").unwrap()));
     let tree_view = Rc::new(RefCell::new(builder.get_object::<gtk::TreeView>("tree_view").unwrap()));
