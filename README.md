@@ -11,6 +11,7 @@
         3.  [Lua API](#org907383a)
         4.  [Dynlib API](#org29f14f5)
         5.  [Rust API](#org936ceca)
+        6.  [GUI Interface](#guiiface)
 
 
 
@@ -220,4 +221,22 @@ A simple example of using the RICS library:
           svr.send_packet(server::can_packet(12, vec![node])); // Send the node id on packet
         });
     }
+
+
+<a id="guiiface"></a>
+
+### GUI Interface
+
+A simple gtk GUI interface is provided to monitor and log messages. It is started with the `gui` subcommand.
+
+It is possible to use a filter that will color the messages and provide the data in a more human readable format. This filter file must be a lua file that contains the following function:
+
+    function filter_can(id, data)
+        # id is a u32
+        # data is a u8 vector
+        # Return a tuple of three elements:
+        # Bool: False to ignore the message (drop)
+        # string: The human readable data format
+        # string: Color name (e.g. "black" or "red")
+    end
 
