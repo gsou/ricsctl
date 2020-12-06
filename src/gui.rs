@@ -70,25 +70,24 @@ fn load_script(lua: &Lua, filename: PathBuf) {
     });
 }
 
-fn dialog_open_file(window: &gtk::Window) -> Option<PathBuf>{
-    let dialog = gtk::FileChooserDialog::new(Some("Load Script"), Some(window), gtk::FileChooserAction::Open);
+fn dialog_open_file(window: &gtk::Window, title: &str, ok: &str) -> Option<PathBuf>{
+    let dialog = gtk::FileChooserDialog::new(Some(title), Some(window), gtk::FileChooserAction::Open);
     dialog.add_buttons(&[
-        ("Load", gtk::ResponseType::Ok),
+        (ok, gtk::ResponseType::Ok),
         ("Cancel", gtk::ResponseType::Cancel),
     ]);
 
-
-    if dialog.run() == gtk::ResponseType::Ok {
+    let ret = if dialog.run() == gtk::ResponseType::Ok {
         if let Some(filename) = dialog.get_filename() {
-            dialog.close();
             Some(filename)
         } else {
-            dialog.close();
             None
         }
     } else {
         None
-    }
+    };
+    dialog.close();
+    ret
 }
 
 
@@ -130,6 +129,7 @@ pub fn gui_main() {
     let lua_clone = Rc::clone(&lua);
     builder.get_object::<gtk::MenuItem>("filter_load").unwrap().connect_activate(move |_| {
         if let Some(file) = dialog_open_file(&window_clone.borrow_mut()) {
+        if let Some(file) = dialog_open_file(&window_clone.borrow_mut(), "Load Script", "Load") {
             load_script(&*lua_clone, file);
         }
     });
