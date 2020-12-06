@@ -43,6 +43,11 @@ struct Packet {
 fn main() {
     env_logger::init();
 
+    // Start GUI if no command line args
+    if std::env::args().len() == 1 {
+        gui::gui_main();
+    }
+
     // Argument parsing
     let matches = App::new("ricsctl")
         .version("0.1.0")
@@ -185,8 +190,6 @@ fn main() {
                                      .help("Node target for the messages")))
         ) .get_matches();
 
-    // TODO Integrate option
-    gui::gui_main();
 
     // Get server paths
     let mut unix_domain_servers: Vec<&str> = matches.values_of("unix_client").unwrap_or_default().collect();
