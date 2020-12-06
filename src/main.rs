@@ -10,6 +10,9 @@ extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
 #[cfg(target_family="unix")]
+extern crate gtk;
+extern crate glib;
+extern crate gio;
 use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
 
@@ -17,6 +20,7 @@ mod script;
 mod server;
 mod rics;
 mod host;
+mod gui;
 use host::ServerState;
 
 use std::fs::File;
@@ -39,6 +43,11 @@ struct Packet {
 fn main() {
     env_logger::init();
 
+    // Start GUI if no command line args
+    if std::env::args().len() == 1 {
+        gui::gui_main(None);
+    }
+
     // Argument parsing
     let matches = App::new("ricsctl")
         .version("0.1.0")
@@ -60,6 +69,8 @@ fn main() {
              .required(false)
              .takes_value(true)
              .help("If a client or server is started, it will connect to the given tcp socket"))
+        .subcommand(SubCommand::with_name("gui")
+                    .about("Open the gui interface with the given server"))
         .subcommand(SubCommand::with_name("plugin")
                     .about("Load an external processing plugin")
                     .arg(Arg::with_name("lua")
@@ -228,8 +239,13 @@ fn main() {
 
         server::RICSServer::with_server(conn, move|mut svr| {
 
+            ///////////////////// GUI //////////////////////////////
+            if let Some(matches) = matches.subcommand_matches("gui") {
+                trace!("Opening gui");
+                svr.connect(true);
+                gui::gui_main(Some(svr));
             ///////////////////// PLUGIN ENGINE /////////////////////////
-            if let Some(matches) = matches.subcommand_matches("plugin") {
+            } else if let Some(matches) = matches.subcommand_matches("plugin") {
                 trace!("Loading plugin engine...");
                 // Load plugin engine
                 let engine: script::ScriptingInterfaceWrapper = if matches.is_present("dynlib") {
