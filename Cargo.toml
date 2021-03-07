@@ -16,6 +16,12 @@ path = "src/lib.rs"
 name = "ricsctl"
 path = "src/main.rs"
 
+[features]
+default = []
+# Compile in a basic GUI
+pluginlua = ["rlua"]
+gui = ["gtk", "gio", "glib", "pluginlua"]
+
 [dependencies]
 protobuf = { version = "2.8.1", features = ["with-bytes"] }
 log = "0.4"
@@ -25,7 +31,7 @@ serialport = "3.3.0"
 libloading = "0.5.2"
 libc = "0.2"
 rand = "0.7.2"
-rlua = { git = "https://github.com/gsou/rlua.git" }
+rlua = { git = "https://github.com/gsou/rlua.git", features = ["system-lua"], default-features = false, optional = true }
 csv = "1.1"
 chrono = "0.4"
 
@@ -38,11 +44,14 @@ protoc-rust = "2.0"
 [dependencies.gtk]
 version = "0.9.0"
 features = ["v3_16"]
+optional = true
 
 [dependencies.gio]
 version = ""
 features = ["v2_44"]
+optional = true
 
 [dependencies.glib]
 version = ""
 features = ["v2_44"]
+optional = true

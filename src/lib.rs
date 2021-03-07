@@ -5,6 +5,7 @@ extern crate protobuf;
 extern crate serialport;
 extern crate libloading;
 extern crate libc;
+#[cfg(feature="pluginlua")]
 extern crate rlua;
 
 pub mod script;

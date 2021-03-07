@@ -1,4 +1,4 @@
-
+#![cfg(feature="gui")]
 use gtk::prelude::*;
 use gio::prelude::*;
 
@@ -89,7 +89,6 @@ fn dialog_open_file(window: &gtk::Window, title: &str, ok: &str, act: gtk::FileC
     dialog.close();
     ret
 }
-
 
 
 

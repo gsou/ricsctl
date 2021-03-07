@@ -5,13 +5,16 @@ extern crate protobuf;
 extern crate serialport;
 extern crate libloading;
 extern crate libc;
+#[cfg(feature="pluginlua")]
 extern crate rlua;
 extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
-#[cfg(target_family="unix")]
+#[cfg(feature="gui")]
 extern crate gtk;
+#[cfg(feature="gui")]
 extern crate glib;
+#[cfg(feature="gui")]
 extern crate gio;
 use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
@@ -44,6 +47,7 @@ fn main() {
     env_logger::init();
 
     // Start GUI if no command line args
+    #[cfg(feature="gui")]
     if std::env::args().len() == 1 {
         gui::gui_main(None);
     }
@@ -241,9 +245,17 @@ fn main() {
 
             ///////////////////// GUI //////////////////////////////
             if let Some(matches) = matches.subcommand_matches("gui") {
-                trace!("Opening gui");
-                svr.connect(true);
-                gui::gui_main(Some(svr));
+                #[cfg(feature="gui")]
+                {
+                    trace!("Opening gui");
+                    svr.connect(true);
+                    gui::gui_main(Some(svr));
+                }
+
+                if ! cfg!(feature="gui") {
+                    println!("This command needs the executable to be build with gui support");
+                }
+
             ///////////////////// PLUGIN ENGINE /////////////////////////
             } else if let Some(matches) = matches.subcommand_matches("plugin") {
                 trace!("Loading plugin engine...");
@@ -251,7 +263,10 @@ fn main() {
                 let engine: script::ScriptingInterfaceWrapper = if matches.is_present("dynlib") {
                     script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::DynlibScript::new(matches.value_of("dynlib").unwrap().to_string()).load())) }
                 } else if matches.is_present("lua") {
-                    script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))) }
+                    #[cfg(feature="pluginlua")]
+                    { script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))) } }
+                    #[cfg(not(feature="pluginlua"))]
+                    { script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::NoEngine))} }
                 } else {
                     script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::NoEngine))}
                 };
@@ -339,18 +354,12 @@ fn main() {
                 if let Some(matches) = matches.subcommand_matches("broadcast") {
                     //////////////////////// CAN BROADCAST FLAG ///////////////////
                     svr.connect(false);
-                    svr.set_can_broadcast(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("BROADCAST").unwrap()).eval() {
-                        Ok(flag) => flag,
-                        Err(e) => { error!("Invalid format for bool flag: {}", e); std::process::exit(1)}
-                    }}));
+                    svr.set_can_broadcast(matches.value_of("BROADCAST").unwrap().parse().expect("invalid format for bool BROADCAST"));
                 }
                 else if let Some(matches) = matches.subcommand_matches("drop") {
                     //////////////////////// CAN DROP CHANCE /////////////////
                     svr.connect(false);
-                    svr.set_can_drop_chance(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("DROP").unwrap()).eval() {
-                        Ok(f) => f,
-                        Err(e) => { error!("Invalid format for float DROP: {}", e); std::process::exit(1)}
-                    }}));
+                    svr.set_can_drop_chance(matches.value_of("DROP").unwrap().parse().expect("invalid format for float DROP"));
                 }
                 else if let Some(matches) = matches.subcommand_matches("connect") {
                     /////////////////////// CAN CONNECT /////////////////////
@@ -397,6 +406,8 @@ fn main() {
                 }
                 else if let Some(matches) = matches.subcommand_matches("send") {
                     //////////////////////// CAN SEND FLAG ///////////////////
+                    #[cfg(feature="pluginlua")]
+                    {
                     svr.connect(false);
 
                     let (id, data) = rlua::Lua::new().context(|ctx| {
@@ -422,6 +433,11 @@ fn main() {
                         svr.send_packet_to(server::can_packet(id, data), target);
                     } else {
                         svr.send_packet(server::can_packet(id, data));
+                    }
+                    }
+
+                    if ! cfg!(feature="pluginlua") {
+                        println!("This command needs the executable to be build with lua support");
                     }
                 }
                 else if let Some(_) = matches.subcommand_matches("log") {
