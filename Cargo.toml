@@ -39,7 +39,7 @@ chrono = "0.4"
 socketcan = "1.7.0"
 
 [build-dependencies]
-protoc-rust = "2.0"
+# protoc-rust = "2.0"
 
 [dependencies.gtk]
 version = "0.9.0"
