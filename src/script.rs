@@ -129,6 +129,10 @@ impl rlua::UserData for ServerBox {
             Ok( std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Invalid current time").as_millis() )
         });
 
+        methods.add_method("rics_exit", |_, this, () | {
+            std::process::exit(0);
+            Ok(())
+        });
     }
 }
 
