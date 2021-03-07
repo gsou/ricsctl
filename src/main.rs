@@ -157,6 +157,8 @@ fn main() {
                                      .index(1)
                                      .required(true)
                                      .help("The socketcan interface name")))
+                    .subcommand(SubCommand::with_name("sendall")
+                                .about("Send all can messages in order from stdin"))
                     .subcommand(SubCommand::with_name("send")
                                 .about("Send a can message")
                                 .arg(Arg::with_name("id")
@@ -403,6 +405,25 @@ fn main() {
                     {
                         error!("SocketCAN is not supported on Windows.")
                     }
+                }
+                else if let Some(matches) = matches.subcommand_matches("sendall") {
+                    //////////////////////// CAN SEND ALL ////////////////////
+                    svr.connect(false);
+                    let mut stdin = std::io::stdin();
+                    loop {
+                        let mut buffer = [0u8 ; 14];
+                        let read = stdin.read(&mut buffer);
+                        if read.unwrap() != 14 { continue; }
+                        if matches.is_present("target") {
+                            let target = matches.value_of("target").unwrap().parse::<i32>().expect("Invalid target number");
+                            svr.send_packet_to(server::can_packet(i32::from_le_bytes(buffer[1..5].try_into().unwrap()), buffer[6..6+buffer[5] as usize].to_vec()), target);
+                            std::thread::sleep(Duration::from_millis(100));
+                        } else {
+                            svr.send_packet(server::can_packet(i32::from_le_bytes(buffer[1..5].try_into().unwrap()), buffer[6..6+buffer[5] as usize].to_vec()));
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                    }
+
                 }
                 else if let Some(matches) = matches.subcommand_matches("send") {
                     //////////////////////// CAN SEND FLAG ///////////////////
