@@ -1,4 +1,5 @@
 /target
+Cross.toml
 Cargo.lock
 /libs
 **/*.rs.bk
