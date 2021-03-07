@@ -31,7 +31,7 @@ serialport = "3.3.0"
 libloading = "0.5.2"
 libc = "0.2"
 rand = "0.7.2"
-rlua = { git = "https://github.com/gsou/rlua.git", features = ["system-lua"], default-features = false, optional = true }
+rlua = { version="0.17.0", features = ["system-lua"], default-features = false, optional = true }
 csv = "1.1"
 chrono = "0.4"
 
