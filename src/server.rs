@@ -381,10 +381,10 @@ pub fn stream_packet(dat: Vec<u8>) -> rics::RICS_Data {
 
 
 pub fn data_to_string(data: &rics::RICS_Data) -> String {
-    format!("<{} -> {} ({}) [{}]>", data.get_source(),
+    format!("<{} -> {} ({:08x}) [{}]>", data.get_source(),
             data.get_target(),
             data.get_id(),
-            data.get_data().iter().map(|x| x.to_string())
+            data.get_data().iter().map(|x| format!("{:02x}", x))
             .collect::<Vec<String>>().join(", "))
 }
 
