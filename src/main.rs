@@ -5,11 +5,17 @@ extern crate protobuf;
 extern crate serialport;
 extern crate libloading;
 extern crate libc;
+#[cfg(feature="pluginlua")]
 extern crate rlua;
 extern crate rand;
 #[cfg(target_family="unix")]
 extern crate socketcan;
-#[cfg(target_family="unix")]
+#[cfg(feature="gui")]
+extern crate gtk;
+#[cfg(feature="gui")]
+extern crate glib;
+#[cfg(feature="gui")]
+extern crate gio;
 use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
 
@@ -17,6 +23,7 @@ mod script;
 mod server;
 mod rics;
 mod host;
+mod gui;
 use host::ServerState;
 
 use std::fs::File;
@@ -39,6 +46,12 @@ struct Packet {
 fn main() {
     env_logger::init();
 
+    // Start GUI if no command line args
+    #[cfg(feature="gui")]
+    if std::env::args().len() == 1 {
+        gui::gui_main(None);
+    }
+
     // Argument parsing
     let matches = App::new("ricsctl")
         .version("0.1.0")
@@ -60,6 +73,8 @@ fn main() {
              .required(false)
              .takes_value(true)
              .help("If a client or server is started, it will connect to the given tcp socket"))
+        .subcommand(SubCommand::with_name("gui")
+                    .about("Open the gui interface with the given server"))
         .subcommand(SubCommand::with_name("plugin")
                     .about("Load an external processing plugin")
                     .arg(Arg::with_name("lua")
@@ -133,6 +148,11 @@ fn main() {
                                      .required(true)))
                     .subcommand(SubCommand::with_name("connect")
                                 .about("Connect a socketcan interface to the network")
+                                .arg(Arg::with_name("extended")
+                                     .required(false)
+                                     .short("e")
+                                     .long("ext")
+                                     .help("Send messages as extended messages by default"))
                                 .arg(Arg::with_name("CANIFACE")
                                      .index(1)
                                      .required(true)
@@ -225,14 +245,30 @@ fn main() {
 
         server::RICSServer::with_server(conn, move|mut svr| {
 
+            ///////////////////// GUI //////////////////////////////
+            if let Some(matches) = matches.subcommand_matches("gui") {
+                #[cfg(feature="gui")]
+                {
+                    trace!("Opening gui");
+                    svr.connect(true);
+                    gui::gui_main(Some(svr));
+                }
+
+                if ! cfg!(feature="gui") {
+                    println!("This command needs the executable to be build with gui support");
+                }
+
             ///////////////////// PLUGIN ENGINE /////////////////////////
-            if let Some(matches) = matches.subcommand_matches("plugin") {
+            } else if let Some(matches) = matches.subcommand_matches("plugin") {
                 trace!("Loading plugin engine...");
                 // Load plugin engine
                 let engine: script::ScriptingInterfaceWrapper = if matches.is_present("dynlib") {
                     script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::DynlibScript::new(matches.value_of("dynlib").unwrap().to_string()).load())) }
                 } else if matches.is_present("lua") {
-                    script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))) }
+                    #[cfg(feature="pluginlua")]
+                    { script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::LuaScript::new(matches.value_of("lua").unwrap().to_string()))) } }
+                    #[cfg(not(feature="pluginlua"))]
+                    { script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::NoEngine))} }
                 } else {
                     script::ScriptingInterfaceWrapper {iface: Mutex::new(Box::new(script::NoEngine))}
                 };
@@ -320,24 +356,20 @@ fn main() {
                 if let Some(matches) = matches.subcommand_matches("broadcast") {
                     //////////////////////// CAN BROADCAST FLAG ///////////////////
                     svr.connect(false);
-                    svr.set_can_broadcast(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("BROADCAST").unwrap()).eval() {
-                        Ok(flag) => flag,
-                        Err(e) => { error!("Invalid format for bool flag: {}", e); std::process::exit(1)}
-                    }}));
+                    svr.set_can_broadcast(matches.value_of("BROADCAST").unwrap().parse().expect("invalid format for bool BROADCAST"));
                 }
                 else if let Some(matches) = matches.subcommand_matches("drop") {
                     //////////////////////// CAN DROP CHANCE /////////////////
                     svr.connect(false);
-                    svr.set_can_drop_chance(rlua::Lua::new().context(|ctx| { match ctx.load(&matches.value_of("DROP").unwrap()).eval() {
-                        Ok(f) => f,
-                        Err(e) => { error!("Invalid format for float DROP: {}", e); std::process::exit(1)}
-                    }}));
+                    svr.set_can_drop_chance(matches.value_of("DROP").unwrap().parse().expect("invalid format for float DROP"));
                 }
                 else if let Some(matches) = matches.subcommand_matches("connect") {
                     /////////////////////// CAN CONNECT /////////////////////
                     svr.connect(true);
                     let node = svr.who_am_i();
                     println!("Logging on node id {}", node);
+
+                    let eff_field = if matches.is_present("extended") {socketcan::EFF_FLAG} else {0u32};
 
                     #[cfg(target_family="unix")]
                     {
@@ -350,7 +382,7 @@ fn main() {
                                 if packet.has_data() {
                                     let data = packet.get_data();
                                     if data.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
-                                        let frame = socketcan::CANFrame::new(data.get_id().try_into().unwrap(), &data.get_data(), false, false).expect("Can't create CAN frame");
+                                        let frame = socketcan::CANFrame::new((data.get_id() as u32) | eff_field, &data.get_data(), false, false).expect("Can't create CAN frame");
                                         socketcan_tx.write_frame_insist(&frame).expect("Can't send CAN frame");
                                     }
                                 }
@@ -395,6 +427,8 @@ fn main() {
                 }
                 else if let Some(matches) = matches.subcommand_matches("send") {
                     //////////////////////// CAN SEND FLAG ///////////////////
+                    #[cfg(feature="pluginlua")]
+                    {
                     svr.connect(false);
 
                     let (id, data) = rlua::Lua::new().context(|ctx| {
@@ -420,6 +454,11 @@ fn main() {
                         svr.send_packet_to(server::can_packet(id, data), target);
                     } else {
                         svr.send_packet(server::can_packet(id, data));
+                    }
+                    }
+
+                    if ! cfg!(feature="pluginlua") {
+                        println!("This command needs the executable to be build with lua support");
                     }
                 }
                 else if let Some(_) = matches.subcommand_matches("log") {

@@ -1,6 +1,8 @@
 //! Rics scripting features
 
 use super::libloading::{Library, Symbol};
+
+#[cfg(feature="pluginlua")]
 use super::rlua;
 use super::server::RICSServer;
 use std::sync::Mutex;
@@ -112,6 +114,7 @@ unsafe impl Send for ServerBox {}
 
 
 
+#[cfg(feature="pluginlua")]
 impl rlua::UserData for ServerBox {
     fn add_methods<'lua, M: rlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method_mut("send_can", |_, this, (id, dat, dest): (u32,Vec<u8>, Option<i32>)| {
@@ -121,9 +124,19 @@ impl rlua::UserData for ServerBox {
             }
             Ok(())
         });
+
+        methods.add_method("get_time_ms", |_, this, () | {
+            Ok( std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Invalid current time").as_millis() )
+        });
+
+        methods.add_method("rics_exit", |_, this, () | {
+            std::process::exit(0);
+            Ok(())
+        });
     }
 }
 
+#[cfg(feature="pluginlua")]
 pub struct LuaScript {
     lua: rlua::Lua,
     on_init: rlua::RegistryKey,
@@ -132,6 +145,7 @@ pub struct LuaScript {
     on_update: rlua::RegistryKey
 }
 
+#[cfg(feature="pluginlua")]
 impl LuaScript {
     pub fn new(path: String) -> LuaScript {
         let lua = rlua::Lua::new();
@@ -186,6 +200,7 @@ impl LuaScript {
 
 }
 
+#[cfg(feature="pluginlua")]
 impl ScriptingInterface for LuaScript {
     fn initialize(&self) -> bool {
         self.lua.context(|ctx| { match ctx.registry_value::<rlua::Function>(&self.on_init).unwrap().call(()) {

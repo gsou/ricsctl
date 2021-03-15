@@ -73,16 +73,32 @@ impl RICSServer {
         socket
     }
 
-    /// New server connection using default settings
-    pub fn new() -> RICSServer {
-       let socket = RICSServer::default_socket();
+    #[cfg(target_family="unix")]
+    pub fn try_default_socket() -> std::io::Result<UnixStream> {
+        let socket = UnixStream::connect("/tmp/rics.socket")?;
+        socket.set_read_timeout(Some(Duration::new(1,0)))?;
+        socket.set_write_timeout(Some(Duration::new(1,0)))?;
+        Ok(socket)
+    }
 
-       RICSServer {
-           input: Box::new(socket.try_clone().unwrap()),
+    #[cfg(target_family="windows")]
+    pub fn try_default_socket() -> std::io::Result<TcpStream> {
+        let socket = TcpStream::connect("localhost:7899")?;
+        socket.set_read_timeout(Some(Duration::new(1,0)))?;
+        socket.set_write_timeout(Some(Duration::new(1,0)))?;
+        Ok(socket)
+    }
+
+    /// New server connection using default settings
+    pub fn new() -> std::io::Result<RICSServer> {
+       let socket = RICSServer::try_default_socket()?;
+
+       Ok(RICSServer {
+           input: Box::new(socket.try_clone()?),
            socket: Box::new(socket),
            node_names: HashMap::new(),
            node: 0,
-       }
+       })
     }
 
     /// CPS server creation
@@ -90,7 +106,7 @@ impl RICSServer {
     where F: FnOnce(RICSServer) -> T {
         // Build server
         let server = match ct {
-            ConnectTo::Default => RICSServer::new(),
+            ConnectTo::Default => RICSServer::new().expect("Failed to connect to server"),
             ConnectTo::Unix(path) => {
                 if cfg!(target_family="unix") {
                     let socket = UnixStream::connect(path).expect("Failed to connect to server");
@@ -365,10 +381,10 @@ pub fn stream_packet(dat: Vec<u8>) -> rics::RICS_Data {
 
 
 pub fn data_to_string(data: &rics::RICS_Data) -> String {
-    format!("<{} -> {} ({}) [{}]>", data.get_source(),
+    format!("<{} -> {} ({:08x}) [{}]>", data.get_source(),
             data.get_target(),
             data.get_id(),
-            data.get_data().iter().map(|x| x.to_string())
+            data.get_data().iter().map(|x| format!("{:02x}", x))
             .collect::<Vec<String>>().join(", "))
 }
 
