@@ -465,11 +465,11 @@ fn main() {
                     //////////////////////////////// CAN LOG ///////////////////////////
                     svr.connect(true);
                     let node = svr.who_am_i();
-                    println!("Logging on node id {}", node);
+                    info!("Logging on node id {}", node);
                     loop {
                         if let Some(p) = svr.get_packet() {
                             if p.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
-                                println!("{}", server::data_to_string(&p));
+                                println!("{}",server::data_to_loggable_string(&p));
                             }
                         }
                     }
