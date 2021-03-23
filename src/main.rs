@@ -35,6 +35,7 @@ use std::os::unix::io::FromRawFd;
 use std::sync::{Arc, RwLock, Mutex};
 use clap::{Arg, App, SubCommand};
 use std::convert::TryInto;
+use std::sync::mpsc::channel;
 
 #[derive(Debug)]
 struct Packet {
@@ -466,10 +467,18 @@ fn main() {
                     svr.connect(true);
                     let node = svr.who_am_i();
                     info!("Logging on node id {}", node);
+
+                    let (chan_send, chan_rx) = channel();
+
+                    std::thread::spawn(move || {
+                        loop {
+                            println!("{}",server::data_to_loggable_string(&chan_rx.recv().unwrap()));
+                        }
+                    });
                     loop {
                         if let Some(p) = svr.get_packet() {
                             if p.get_field_type() == rics::RICS_Data_RICS_DataType::CAN {
-                                println!("{}",server::data_to_loggable_string(&p));
+                                chan_send.send(p).unwrap();
                             }
                         }
                     }

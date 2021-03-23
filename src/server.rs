@@ -391,8 +391,7 @@ pub fn data_to_string(data: &rics::RICS_Data) -> String {
 pub fn data_to_loggable_string(data: &rics::RICS_Data) -> String{
     let time = std::time::SystemTime::now();
     let datetime: chrono::DateTime<chrono::offset::Local> = time.into();
-    format!("{},{},{},{},{},{}", datetime.format("%Y-%m-%d %T%.3f"), data.get_source(), data.get_target(),
-             data.get_id(), data.get_data().len(), data.get_data().iter()
+    format!("{},{},{},{}", datetime.format("%Y-%m-%d %T%.3f"), data.get_id(), data.get_data().len(), data.get_data().iter()
              .map(|x|format!("{}",x)).collect::<Vec<String>>().join(","))
 }
 
